@@ -232,6 +232,10 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
+            # =========================================================
+            # CRÉATION DES TABLES (SANS INDEX DANS LE CREATE TABLE)
+            # =========================================================
+            
             # Table des clés API (avec payment_id)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS api_keys (
@@ -249,10 +253,7 @@ class DatabaseManager:
                     expires_at DATETIME,
                     is_active BOOLEAN DEFAULT 1,
                     is_revoked BOOLEAN DEFAULT 0,
-                    payment_id VARCHAR(100) UNIQUE,
-                    INDEX idx_key (api_key),
-                    INDEX idx_key_id (key_id),
-                    INDEX idx_payment (payment_id)
+                    payment_id VARCHAR(100) UNIQUE
                 )
             """)
             
@@ -267,8 +268,7 @@ class DatabaseManager:
                     status_code INTEGER,
                     response_time_ms INTEGER,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (key_id) REFERENCES api_keys(key_id),
-                    INDEX idx_key_time (key_id, created_at)
+                    FOREIGN KEY (key_id) REFERENCES api_keys(key_id)
                 )
             """)
             
@@ -280,9 +280,7 @@ class DatabaseManager:
                     attempt_count INTEGER DEFAULT 1,
                     first_attempt DATETIME DEFAULT CURRENT_TIMESTAMP,
                     last_attempt DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    blocked_until DATETIME,
-                    INDEX idx_ip (ip_address),
-                    INDEX idx_blocked (blocked_until)
+                    blocked_until DATETIME
                 )
             """)
             
@@ -298,13 +296,34 @@ class DatabaseManager:
                     status VARCHAR(20),
                     payload TEXT,
                     verified BOOLEAN DEFAULT 0,
-                    processed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_transaction (transaction_id),
-                    INDEX idx_key (key_id)
+                    processed_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
-            # Vue des statistiques
+            # =========================================================
+            # CRÉATION DES INDEX (APRÈS LES TABLES)
+            # =========================================================
+            
+            # Index pour api_keys
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_key ON api_keys(api_key)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_key_id ON api_keys(key_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_payment ON api_keys(payment_id)")
+            
+            # Index pour api_requests
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_key_time ON api_requests(key_id, created_at)")
+            
+            # Index pour brute_force_attempts
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ip ON brute_force_attempts(ip_address)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_blocked ON brute_force_attempts(blocked_until)")
+            
+            # Index pour payment_webhooks
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_transaction ON payment_webhooks(transaction_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_key ON payment_webhooks(key_id)")
+            
+            # =========================================================
+            # VUE DES STATISTIQUES
+            # =========================================================
+            
             cursor.execute("""
                 CREATE VIEW IF NOT EXISTS api_stats AS
                 SELECT 
